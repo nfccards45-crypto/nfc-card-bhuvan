@@ -1,14 +1,11 @@
 {
-  "redirects": [
-    {
-      "source": "/c/:token",
-      "destination": "https://ybrhzwsquyzpnzwyvang.supabase.co/functions/v1/c/:token",
-      "permanent": false
-    }
-  ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/c/:token",
+      "destination": "/api/c/:token"
+    },
+    {
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
