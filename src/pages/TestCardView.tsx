@@ -28,19 +28,36 @@ export const TestCardView: React.FC = () => {
 
   const cleanToken = (publicToken || '').trim().toUpperCase();
 
+  const [redirectingTo, setRedirectingTo] = useState<string | null>(null);
+
   useEffect(() => {
-    const fetchCard = async () => {
+    const fetchCardAndRedirect = async () => {
       if (!cleanToken) {
         setIsLoading(false);
         return;
       }
 
+      // Check if URL has ?preview=true to bypass auto-redirection
+      const searchParams = new URLSearchParams(window.location.search);
+      const isPreview = searchParams.get('preview') === 'true' || searchParams.get('test') === 'true';
+
       setIsLoading(true);
       try {
         const found = await cardService.getCardByToken(cleanToken);
         setCard(found);
+
         if (found) {
+          // Record scan count in database
           await cardService.recordCardScan(cleanToken);
+
+          // If not preview mode and card has a valid destination, REDIRECT!
+          if (!isPreview && found.status !== 'Disabled' && found.destination_url && found.destination_url.trim()) {
+            const target = found.destination_url.trim();
+            setRedirectingTo(target);
+            // Instant redirect to destination URL
+            window.location.replace(target);
+            return;
+          }
         }
       } catch (err) {
         console.error('Error looking up token:', err);
@@ -49,7 +66,7 @@ export const TestCardView: React.FC = () => {
       }
     };
 
-    fetchCard();
+    fetchCardAndRedirect();
   }, [cleanToken]);
 
   const dynamicUrl = cleanToken ? getDynamicUrl(cleanToken) : '';
@@ -64,10 +81,15 @@ export const TestCardView: React.FC = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || redirectingTo) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
-        <LoadingState message="Extracting dynamic token & verifying scan..." />
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4 text-center">
+        <LoadingState message={redirectingTo ? `Redirecting to destination...` : `Resolving card token & counting scan...`} />
+        {redirectingTo && (
+          <p className="mt-4 text-xs font-mono text-emerald-400 break-all max-w-md animate-pulse">
+            {redirectingTo}
+          </p>
+        )}
       </div>
     );
   }

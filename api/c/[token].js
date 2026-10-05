@@ -107,7 +107,7 @@ function renderHtmlErrorPage(title, message, detail, statusCode = 404) {
   };
 }
 
-module.exports = async function handler(req, res) {
+export default async function handler(req, res) {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
