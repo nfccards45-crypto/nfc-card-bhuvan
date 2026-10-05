@@ -8,7 +8,7 @@ import { Input } from '../components/ui/Input';
 import { APP_CONFIG } from '../lib/constants';
 
 const DEMO_EMAIL = 'admin@cardsync.io';
-const DEMO_PASSWORD = 'admin123';
+const DEMO_PASSWORD = 'AdminPassword123!';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState(DEMO_EMAIL);

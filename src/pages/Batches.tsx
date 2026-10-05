@@ -18,15 +18,13 @@ import { Table, Column } from '../components/ui/Table';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Select } from '../components/ui/Select';
 import { Modal } from '../components/ui/Modal';
 import { ConfirmDialog } from '../components/ui/ConfirmDialog';
 import { EmptyState } from '../components/ui/EmptyState';
 import { LoadingState } from '../components/ui/LoadingState';
 import { batchService } from '../services/batchService';
-import { clientService } from '../services/clientService';
 import { cardService } from '../services/cardService';
-import { Batch, Client, Card } from '../types';
+import { Batch, Card } from '../types';
 import { formatDate } from '../utils';
 import { exportCardsQrZip } from '../utils/qrExportUtils';
 import { useToast } from '../hooks/useToast';
@@ -36,7 +34,6 @@ export const Batches: React.FC = () => {
   const navigate = useNavigate();
   const { success, error } = useToast();
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [clients, setClients] = useState<Client[]>([]);
   const [allCards, setAllCards] = useState<Card[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -56,8 +53,8 @@ export const Batches: React.FC = () => {
 
   // Form State
   const [formData, setFormData] = useState({
-    client_id: '',
-    destination_url: 'https://g.page/r/example-review/review',
+    client_name: '',
+    destination_url: 'https://www.google.com/',
     quantity: 50,
     batch_name: '',
   });
@@ -65,17 +62,12 @@ export const Batches: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [batchesData, clientsData, cardsData] = await Promise.all([
+      const [batchesData, cardsData] = await Promise.all([
         batchService.getBatches(),
-        clientService.getClients(),
         cardService.getCards().catch(() => []),
       ]);
       setBatches(batchesData);
-      setClients(clientsData);
       setAllCards(cardsData);
-      if (clientsData.length > 0 && !formData.client_id) {
-        setFormData(prev => ({ ...prev, client_id: clientsData[0].id }));
-      }
     } catch (err) {
       error('Failed to load batches', (err as Error).message);
     } finally {
@@ -89,8 +81,8 @@ export const Batches: React.FC = () => {
 
   const handleOpenCreate = () => {
     setFormData({
-      client_id: clients[0]?.id || '',
-      destination_url: 'https://g.page/r/example-review/review',
+      client_name: '',
+      destination_url: 'https://www.google.com/',
       quantity: 50,
       batch_name: '',
     });
@@ -99,10 +91,6 @@ export const Batches: React.FC = () => {
 
   const handleCreateBatch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.client_id) {
-      error('Please select a client');
-      return;
-    }
     if (!formData.destination_url) {
       error('Please provide the Google Review URL');
       return;
@@ -349,20 +337,18 @@ export const Batches: React.FC = () => {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         title="Generate New Card Batch"
-        description="Select client, quantity (default 50), and initial Google Review destination URL."
+        description="Set client/business name, quantity (default 50), and Google Review destination URL."
         maxWidth="lg"
       >
         <form onSubmit={handleCreateBatch} className="space-y-4">
           <div>
-            <Select
-              label="Select Client"
-              required
-              value={formData.client_id}
-              onChange={e => setFormData({ ...formData, client_id: e.target.value })}
-              options={clients.map(c => ({
-                value: c.id,
-                label: `${c.business_name} (${c.contact_name})`,
-              }))}
+            <Input
+              label="Client / Business Name (Optional)"
+              placeholder="e.g. Apex Dental Clinic, Royal Salon, etc."
+              value={formData.client_name}
+              onChange={e => setFormData({ ...formData, client_name: e.target.value })}
+              helperText="Client or business name associated with this batch of cards"
+              leftIcon={<Building2 className="w-4 h-4" />}
             />
           </div>
 

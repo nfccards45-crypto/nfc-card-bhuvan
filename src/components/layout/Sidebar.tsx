@@ -2,7 +2,6 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Users,
   Layers,
   CreditCard,
   QrCode,
@@ -20,9 +19,8 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ onCloseMobile }) => {
   const navItems = [
     { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { label: 'Clients', path: '/clients', icon: Users },
     { label: 'Batches', path: '/batches', icon: Layers },
-    { label: 'Cards', path: '/cards', icon: CreditCard },
+    { label: 'Cards Inventory', path: '/cards', icon: CreditCard },
     { label: 'QR Generator', path: '/qr-generator', icon: QrCode },
     { label: 'Scanner', path: '/scanner', icon: ScanLine },
     { label: 'Analytics', path: '/analytics', icon: BarChart3 },

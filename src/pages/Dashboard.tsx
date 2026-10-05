@@ -313,7 +313,7 @@ export const Dashboard: React.FC = () => {
               type="url"
               value={newDestinationUrl}
               onChange={e => setNewDestinationUrl(e.target.value)}
-              placeholder="https://example.com"
+              placeholder="https://www.google.com"
               helperText="Where users will be redirected. Can be modified at any time without changing the QR/token."
             />
           </div>

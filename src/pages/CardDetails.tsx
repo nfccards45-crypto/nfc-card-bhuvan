@@ -43,9 +43,10 @@ export const CardDetails: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Edit Destination Modal
+  // Edit Destination & Client Modal
   const [isEditDestModalOpen, setIsEditDestModalOpen] = useState(false);
   const [destinationInput, setDestinationInput] = useState('');
+  const [clientNameInput, setClientNameInput] = useState('');
   const [isSavingDest, setIsSavingDest] = useState(false);
 
   // Change Status Modal
@@ -69,6 +70,7 @@ export const CardDetails: React.FC = () => {
       if (data) {
         setCard(data);
         setDestinationInput(data.destination_url);
+        setClientNameInput(data.client_name || '');
         setStatusInput(data.status);
       } else {
         setCard(null);
@@ -120,15 +122,18 @@ export const CardDetails: React.FC = () => {
 
     setIsSavingDest(true);
     try {
-      const updated = await cardService.updateCardDestination(card.id, destinationInput.trim());
+      let updated = await cardService.updateCardDestination(card.id, destinationInput.trim());
+      if (clientNameInput.trim() !== (card.client_name || '')) {
+        updated = await cardService.updateCardClient(card.id, clientNameInput.trim());
+      }
       setCard(updated);
       success(
-        'Destination updated successfully in database.',
+        'Card details updated successfully.',
         'The physical QR, token, and dynamic URL remain unchanged.'
       );
       setIsEditDestModalOpen(false);
     } catch (err) {
-      error('Failed to update destination', (err as Error).message);
+      error('Failed to update card', (err as Error).message);
     } finally {
       setIsSavingDest(false);
     }
@@ -436,6 +441,15 @@ export const CardDetails: React.FC = () => {
 
               <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-100 space-y-1">
                 <span className="text-xs text-slate-400 font-medium uppercase tracking-wider block">
+                  Assigned Client / Business
+                </span>
+                <span className="font-semibold text-slate-900 text-sm">
+                  {card.client_name || <span className="text-slate-400 font-normal italic">Unassigned</span>}
+                </span>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-100 space-y-1">
+                <span className="text-xs text-slate-400 font-medium uppercase tracking-wider block">
                   Total Verified Scans
                 </span>
                 <span className="font-mono font-bold text-slate-900 text-base">{card.total_scans || card.scan_count || 0}</span>
@@ -517,12 +531,12 @@ export const CardDetails: React.FC = () => {
         </div>
       </div>
 
-      {/* Edit Destination Modal */}
+      {/* Edit Destination & Client Modal */}
       <Modal
         isOpen={isEditDestModalOpen}
         onClose={() => setIsEditDestModalOpen(false)}
-        title="Edit Card Destination URL"
-        description={`Update where users will land when tapping or scanning ${card.internal_card_no}`}
+        title={`Edit Card ${card.internal_card_no}`}
+        description={`Update client assignment or destination URL for token ${card.public_token}`}
         maxWidth="md"
       >
         <form onSubmit={handleSaveDestination} className="space-y-4">
@@ -537,12 +551,22 @@ export const CardDetails: React.FC = () => {
 
           <div>
             <Input
-              label="New Destination URL"
+              label="Client / Business Name (Optional)"
+              value={clientNameInput}
+              onChange={e => setClientNameInput(e.target.value)}
+              placeholder="e.g. Acme Corp, Dr. Smith Dental, etc."
+              helperText="Client or business assigned to this card"
+            />
+          </div>
+
+          <div>
+            <Input
+              label="Destination URL"
               type="url"
               required
               value={destinationInput}
               onChange={e => setDestinationInput(e.target.value)}
-              placeholder="https://example.com"
+              placeholder="https://www.google.com"
               helperText="The dynamic URL will forward to this new destination without changing the physical QR"
             />
           </div>

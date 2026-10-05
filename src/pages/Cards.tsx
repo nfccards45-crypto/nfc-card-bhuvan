@@ -30,7 +30,7 @@ import { cardService } from '../services/cardService';
 import { Card, CardStatus } from '../types';
 import { formatDate, getDynamicUrl, copyToClipboard } from '../utils';
 import { exportCardsQrZip } from '../utils/qrExportUtils';
-import { ALL_CARD_STATUSES } from '../lib/constants';
+import { ALL_CARD_STATUSES, APP_CONFIG } from '../lib/constants';
 import { useToast } from '../hooks/useToast';
 
 export const Cards: React.FC = () => {
@@ -51,12 +51,14 @@ export const Cards: React.FC = () => {
   // Modal for Create Single Card
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [newDestinationUrl, setNewDestinationUrl] = useState('');
+  const [newClientName, setNewClientName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
-  // Modal for Edit Destination / Status Change
+  // Modal for Edit Destination / Status Change / Client Assignment
   const [selectedCard, setSelectedCard] = useState<Card | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editDestinationUrl, setEditDestinationUrl] = useState('');
+  const [editClientName, setEditClientName] = useState('');
   const [editStatus, setEditStatus] = useState<CardStatus>('Ready');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -143,6 +145,7 @@ export const Cards: React.FC = () => {
     e.stopPropagation();
     setSelectedCard(card);
     setEditDestinationUrl(card.destination_url);
+    setEditClientName(card.client_name || '');
     setEditStatus(card.status);
     setIsEditModalOpen(true);
   };
@@ -211,6 +214,7 @@ export const Cards: React.FC = () => {
     try {
       const created = await cardService.createCard({
         destination_url: newDestinationUrl.trim() || undefined,
+        client_name: newClientName.trim() || undefined,
       });
       success(
         'Card Created Successfully',
@@ -218,6 +222,7 @@ export const Cards: React.FC = () => {
       );
       setIsCreateModalOpen(false);
       setNewDestinationUrl('');
+      setNewClientName('');
       await loadData();
     } catch (err) {
       error('Failed to create card', (err as Error).message);
@@ -238,7 +243,10 @@ export const Cards: React.FC = () => {
       if (editStatus !== selectedCard.status) {
         await cardService.updateCardStatus(selectedCard.id, editStatus);
       }
-      success('Card Updated', `Saved destination and status for ${selectedCard.internal_card_no}`);
+      if (editClientName.trim() !== (selectedCard.client_name || '')) {
+        await cardService.updateCardClient(selectedCard.id, editClientName.trim());
+      }
+      success('Card Updated', `Saved details for ${selectedCard.internal_card_no}`);
       setIsEditModalOpen(false);
       await loadData();
     } catch (err) {
@@ -282,6 +290,15 @@ export const Cards: React.FC = () => {
       cell: card => (
         <div className="flex items-center gap-2">
           <span className="font-mono font-bold text-slate-900">{card.internal_card_no}</span>
+        </div>
+      ),
+    },
+    {
+      header: 'Client / Business',
+      accessorKey: 'client_name',
+      cell: card => (
+        <div className="text-xs font-medium text-slate-800">
+          {card.client_name || <span className="text-slate-400 italic">Unassigned</span>}
         </div>
       ),
     },
@@ -558,12 +575,22 @@ export const Cards: React.FC = () => {
         <form onSubmit={handleCreateCard} className="space-y-4">
           <div>
             <Input
+              label="Client / Business Name (Optional)"
+              value={newClientName}
+              onChange={e => setNewClientName(e.target.value)}
+              placeholder="e.g. Acme Corp, Dr. Smith Dental, etc."
+              helperText="Assign a client or business name directly to this card."
+            />
+          </div>
+
+          <div>
+            <Input
               label="Destination URL (Optional)"
               type="url"
               value={newDestinationUrl}
               onChange={e => setNewDestinationUrl(e.target.value)}
-              placeholder="https://example.com"
-              helperText="Where users will be redirected. Can be assigned or updated at any time."
+              placeholder="https://www.google.com"
+              helperText="Where users will be redirected. Defaults to Google or can be updated anytime."
             />
           </div>
 
@@ -571,7 +598,7 @@ export const Cards: React.FC = () => {
             <div className="font-semibold text-slate-800">Dynamic Card Specifications:</div>
             <div>• Internal Card #: Auto-incrementing in Supabase (e.g. CARD-0005)</div>
             <div>• Public Token: Secure 8-character random token (e.g. X8KQ29LM)</div>
-            <div>• Dynamic URL: Canonical <code className="font-mono text-brand-700">https://dynamic-qr-1.vercel.app/c/&#123;TOKEN&#125;</code></div>
+            <div>• Dynamic URL: <code className="font-mono text-brand-700">{APP_CONFIG.dynamicBaseUrl}/c/&#123;TOKEN&#125;</code></div>
             <div>• Status: Defaults to READY with scan count 0</div>
           </div>
 
@@ -597,7 +624,7 @@ export const Cards: React.FC = () => {
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           title={`Edit ${selectedCard.internal_card_no}`}
-          description={`Update destination URL or status for token ${selectedCard.public_token}`}
+          description={`Update destination URL, client details, or status for token ${selectedCard.public_token}`}
           maxWidth="md"
         >
           <form onSubmit={handleSaveCard} className="space-y-4">
@@ -615,12 +642,22 @@ export const Cards: React.FC = () => {
 
             <div>
               <Input
+                label="Client / Business Name (Optional)"
+                value={editClientName}
+                onChange={e => setEditClientName(e.target.value)}
+                placeholder="e.g. Acme Corp, Dr. Smith Dental, etc."
+                helperText="Client or business assigned to this card"
+              />
+            </div>
+
+            <div>
+              <Input
                 label="Destination URL"
                 type="url"
                 required
                 value={editDestinationUrl}
                 onChange={e => setEditDestinationUrl(e.target.value)}
-                placeholder="https://example.com"
+                placeholder="https://www.google.com"
                 helperText="Where users are forwarded when accessing the dynamic link"
               />
             </div>

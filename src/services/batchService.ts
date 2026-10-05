@@ -1,6 +1,5 @@
 import { Batch, Card } from '../types';
 import { db } from './storage';
-import { clientService } from './clientService';
 import { cardService } from './cardService';
 
 export const batchService = {
@@ -14,27 +13,24 @@ export const batchService = {
   },
 
   async createBatch(data: {
-    client_id: string;
+    client_id?: string;
+    client_name?: string;
     destination_url: string;
     quantity: number;
     batch_name?: string;
   }): Promise<{ batch: Batch; generatedCards: Card[] }> {
-    const client = await clientService.getClientById(data.client_id);
-    if (!client) {
-      throw new Error(`Client ${data.client_id} not found`);
-    }
-
     const batches = db.getBatches();
     const batchId = `batch_${Date.now().toString(36)}`;
     const now = new Date().toISOString();
 
-    const clientShortName = client.business_name.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10);
-    const batchName = data.batch_name?.trim() || `${clientShortName}-Batch-${batches.length + 1}`;
+    const clientName = data.client_name?.trim() || 'General';
+    const clientShortName = clientName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 10) || 'Batch';
+    const batchName = data.batch_name?.trim() || `${clientShortName}-${batches.length + 1}`;
 
     const newBatch: Batch = {
       id: batchId,
-      client_id: client.id,
-      client_name: client.business_name,
+      client_id: data.client_id || `cli_${Date.now().toString(36)}`,
+      client_name: clientName,
       batch_name: batchName,
       quantity: data.quantity,
       status: 'Completed',
@@ -47,8 +43,8 @@ export const batchService = {
       quantity: data.quantity,
       destination_url: data.destination_url.trim(),
       status: 'Ready',
-      client_id: client.id,
-      client_name: client.business_name,
+      client_id: newBatch.client_id,
+      client_name: clientName,
       batch_id: batchId,
       batch_name: batchName,
     });
@@ -58,7 +54,7 @@ export const batchService = {
 
     db.logActivity({
       action: 'Batch Created',
-      description: `Batch "${batchName}" (${data.quantity} cards) generated in Supabase for ${client.business_name}`,
+      description: `Batch "${batchName}" (${data.quantity} cards) generated in Supabase for ${clientName}`,
       type: 'batch',
       entity_id: newBatch.id,
     });

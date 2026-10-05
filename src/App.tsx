@@ -6,8 +6,8 @@ import { AppShell } from './components/layout/AppShell';
 
 // Pages
 import { Login } from './pages/Login';
+import { LandingPage } from './pages/LandingPage';
 import { Dashboard } from './pages/Dashboard';
-import { Clients } from './pages/Clients';
 import { Batches } from './pages/Batches';
 import { Cards } from './pages/Cards';
 import { CardDetails } from './pages/CardDetails';
@@ -23,6 +23,9 @@ export const App: React.FC = () => {
       <AuthProvider>
         <ToastProvider>
           <Routes>
+            {/* Public Landing Page */}
+            <Route path="/" element={<LandingPage />} />
+
             {/* Public Phase 1 Test Dynamic URL Card Route */}
             <Route path="/c/:publicToken" element={<TestCardView />} />
 
@@ -32,7 +35,6 @@ export const App: React.FC = () => {
             {/* Authenticated CRM Shell */}
             <Route element={<AppShell />}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/clients" element={<Clients />} />
               <Route path="/batches" element={<Batches />} />
               <Route path="/cards" element={<Cards />} />
               <Route path="/cards/:id" element={<CardDetails />} />
@@ -40,9 +42,8 @@ export const App: React.FC = () => {
               <Route path="/scanner" element={<Scanner />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/settings" element={<Settings />} />
-              {/* Default fallback route redirects to /dashboard */}
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="*" element={<Navigate to="/dashboard" replace />} />
+              {/* Default fallback for unknown routes inside shell */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
         </ToastProvider>

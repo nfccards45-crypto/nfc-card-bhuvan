@@ -4,10 +4,14 @@ export const APP_CONFIG = {
   appName: 'CardSync CRM',
   tagline: 'Dynamic QR + NFC Card Infrastructure',
   version: '2.0.0-production',
-  dynamicBaseUrl:
-    import.meta.env.VITE_DYNAMIC_BASE_URL || 'https://dynamic-qr-1.vercel.app',
+  get dynamicBaseUrl(): string {
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      return import.meta.env.VITE_DYNAMIC_BASE_URL || window.location.origin;
+    }
+    return import.meta.env.VITE_DYNAMIC_BASE_URL || 'https://ybrhzwsquyzpnzwyvang.supabase.co';
+  },
   dynamicPathPrefix: '/c/',
-  defaultGoogleReviewUrl: 'https://example.com/google-review-test',
+  defaultGoogleReviewUrl: 'https://www.google.com/',
 };
 
 export const CARD_STATUS_CONFIG: Record<CardStatus, { label: string; color: string; bg: string; border: string; dot: string }> = {

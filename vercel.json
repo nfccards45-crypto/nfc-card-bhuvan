@@ -2,7 +2,7 @@
   "redirects": [
     {
       "source": "/c/:token",
-      "destination": "https://hqabqueltgyhvcxxqebj.supabase.co/functions/v1/c/:token",
+      "destination": "https://ybrhzwsquyzpnzwyvang.supabase.co/functions/v1/c/:token",
       "permanent": false
     }
   ],

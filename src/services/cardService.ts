@@ -69,12 +69,48 @@ export const cardService = {
       throw new Error(`Failed to load cards: ${error.message}`);
     }
 
-    return (data as SupabaseCardRow[] || []).map(mapRowToCard);
+    const localMap = new Map<string, Partial<Card>>();
+    db.getCards().forEach(c => {
+      localMap.set(c.id, c);
+      if (c.internal_card_no) localMap.set(c.internal_card_no, c);
+      if (c.public_token) localMap.set(c.public_token, c);
+    });
+
+    return (data as SupabaseCardRow[] || []).map(row => {
+      const card = mapRowToCard(row);
+      const cached = localMap.get(row.id) || localMap.get(row.internal_card_no) || localMap.get(row.public_token);
+      if (cached) {
+        if (cached.client_name) card.client_name = cached.client_name;
+        if (cached.client_id) card.client_id = cached.client_id;
+        if (cached.batch_name) card.batch_name = cached.batch_name;
+        if (cached.batch_id) card.batch_id = cached.batch_id;
+      }
+      return card;
+    });
   },
 
   /**
-   * Fetch single card by internal_card_no or UUID id
+   * Update client details on a card
    */
+  async updateCardClient(id: string, clientName: string): Promise<Card> {
+    const card = await this.getCardById(id);
+    if (!card) {
+      throw new Error(`Card ${id} not found`);
+    }
+
+    card.client_name = clientName.trim();
+    const currentLocal = db.getCards().filter(c => c.id !== card.id && c.internal_card_no !== card.internal_card_no);
+    db.saveCards([card, ...currentLocal]);
+
+    db.logActivity({
+      action: 'Card Client Assigned',
+      description: `Assigned client "${clientName}" to card ${card.internal_card_no}`,
+      type: 'card',
+      entity_id: card.id,
+    });
+
+    return card;
+  },
   async getCardById(id: string): Promise<Card | null> {
     if (!supabase) {
       throw new Error('Supabase client is not configured.');
