@@ -147,13 +147,20 @@ export const cardService = {
       .ilike('public_token', cleanToken)
       .maybeSingle();
 
-    if (error) {
-      console.error(`Error fetching card by token ${token}:`, error);
-      throw new Error(`Failed to load card: ${error.message}`);
+    if (!error && data) {
+      return mapRowToCard(data as SupabaseCardRow);
     }
 
-    if (!data) return null;
-    return mapRowToCard(data as SupabaseCardRow);
+    // For public / anonymous phone scans where RLS blocks SELECT * FROM cards,
+    // resolve via the SECURITY DEFINER RPC
+    try {
+      const rpcCard = await this.recordCardScan(cleanToken);
+      if (rpcCard) return rpcCard;
+    } catch {
+      // ignore RPC error
+    }
+
+    return null;
   },
 
   /**

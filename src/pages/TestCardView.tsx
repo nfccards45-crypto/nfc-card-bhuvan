@@ -52,7 +52,8 @@ export const TestCardView: React.FC = () => {
 
           // If not preview mode and card has a valid destination, REDIRECT!
           if (!isPreview && found.status !== 'Disabled' && found.destination_url && found.destination_url.trim()) {
-            const target = found.destination_url.trim();
+            const rawTarget = found.destination_url.trim();
+            const target = /^https?:\/\//i.test(rawTarget) ? rawTarget : `https://${rawTarget}`;
             setRedirectingTo(target);
             // Instant redirect to destination URL
             window.location.replace(target);
