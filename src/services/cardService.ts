@@ -397,10 +397,10 @@ export const cardService = {
       throw new Error('Supabase client is not configured.');
     }
 
-    const { error } = await supabase
-      .from('cards')
-      .delete()
-      .or(`id.eq.${id},internal_card_no.ilike.${id}`);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    let query = supabase.from('cards').delete();
+    query = isUuid ? query.eq('id', id) : query.ilike('internal_card_no', id);
+    const { error } = await query;
 
     if (error) {
       console.error(`Error deleting card ${id} from Supabase:`, error);
@@ -498,15 +498,16 @@ export const cardService = {
       throw new Error('Invalid destination URL. Must be a valid HTTP or HTTPS URL (e.g. https://example.com)');
     }
 
-    const { data, error } = await supabase
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    let query = supabase
       .from('cards')
       .update({
         destination_url: trimmed,
         updated_at: new Date().toISOString(),
-      })
-      .or(`id.eq.${id},internal_card_no.ilike.${id}`)
-      .select()
-      .single();
+      });
+
+    query = isUuid ? query.eq('id', id) : query.ilike('internal_card_no', id);
+    const { data, error } = await query.select().single();
 
     if (error || !data) {
       console.error(`Error updating destination for card ${id}:`, error);
@@ -533,16 +534,17 @@ export const cardService = {
     }
 
     const dbStatus = toDbStatus(status);
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('cards')
       .update({
         status: dbStatus,
         updated_at: new Date().toISOString(),
-      })
-      .or(`id.eq.${id},internal_card_no.ilike.${id}`)
-      .select()
-      .single();
+      });
+
+    query = isUuid ? query.eq('id', id) : query.ilike('internal_card_no', id);
+    const { data, error } = await query.select().single();
 
     if (error || !data) {
       console.error(`Error updating status for card ${id}:`, error);
