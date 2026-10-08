@@ -5,7 +5,7 @@
       "destination": "/api/c/:token"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
