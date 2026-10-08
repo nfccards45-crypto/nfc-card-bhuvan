@@ -515,7 +515,11 @@ export const cardService = {
 
     const cardRow = data as SupabaseCardRow;
     // Transparently dual-sync printed QR cards on legacy Supabase
-    legacySyncService.syncCard(cardRow.public_token, trimmed).catch(err => console.warn('[LegacySync] Background sync err:', err));
+    try {
+      await legacySyncService.syncCard(cardRow.public_token, trimmed);
+    } catch (syncErr) {
+      console.warn('[LegacySync] Background sync err:', syncErr);
+    }
 
     return mapRowToCard(cardRow);
   },
@@ -547,7 +551,11 @@ export const cardService = {
 
     const cardRow = data as SupabaseCardRow;
     // Transparently dual-sync status to legacy Supabase
-    legacySyncService.syncCard(cardRow.public_token, undefined, dbStatus).catch(err => console.warn('[LegacySync] Background sync err:', err));
+    try {
+      await legacySyncService.syncCard(cardRow.public_token, undefined, dbStatus);
+    } catch (syncErr) {
+      console.warn('[LegacySync] Background sync err:', syncErr);
+    }
 
     return mapRowToCard(cardRow);
   },

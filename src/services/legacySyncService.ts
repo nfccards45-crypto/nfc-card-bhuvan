@@ -60,6 +60,27 @@ export const legacySyncService = {
     if (!publicToken) return false;
     const cleanToken = publicToken.trim().toUpperCase();
 
+    // Strategy 1: Try Vercel Serverless API (/api/sync-legacy) - reliable server-side execution
+    try {
+      const apiRes = await fetch('/api/sync-legacy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token: cleanToken,
+          destination_url: destinationUrl,
+          status,
+        }),
+      });
+
+      if (apiRes.ok) {
+        console.info(`[LegacySync] ✓ Synced ${cleanToken} via serverless API`);
+        return true;
+      }
+    } catch {
+      // Fallback to direct client-side REST call if /api/ not reachable (e.g. dev mode)
+    }
+
+    // Strategy 2: Direct REST call to legacy Supabase
     try {
       const token = await getLegacyAuthToken();
       if (!token) return false;
@@ -84,7 +105,7 @@ export const legacySyncService = {
         return false;
       }
 
-      console.info(`[LegacySync] ✓ Successfully synced printed card ${cleanToken} to legacy backend`);
+      console.info(`[LegacySync] ✓ Successfully synced printed card ${cleanToken} directly`);
       return true;
     } catch (err) {
       console.warn(`[LegacySync] Error syncing card ${cleanToken}:`, err);
