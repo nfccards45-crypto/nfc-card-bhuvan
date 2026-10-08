@@ -3,6 +3,7 @@ import { generatePublicToken, formatCardNumber, getDynamicUrl } from '../utils';
 import { supabase } from '../lib/supabase';
 import { normalizeCardStatus, toDbStatus } from '../lib/constants';
 import { db } from './storage';
+import { legacySyncService } from './legacySyncService';
 
 export interface CreateCardInput {
   destination_url?: string | null;
@@ -512,7 +513,11 @@ export const cardService = {
       throw new Error(`Failed to update destination: ${error?.message || 'Card not found'}`);
     }
 
-    return mapRowToCard(data as SupabaseCardRow);
+    const cardRow = data as SupabaseCardRow;
+    // Transparently dual-sync printed QR cards on legacy Supabase
+    legacySyncService.syncCard(cardRow.public_token, trimmed).catch(err => console.warn('[LegacySync] Background sync err:', err));
+
+    return mapRowToCard(cardRow);
   },
 
   /**
@@ -540,7 +545,11 @@ export const cardService = {
       throw new Error(`Failed to update card status: ${error?.message || 'Card not found'}`);
     }
 
-    return mapRowToCard(data as SupabaseCardRow);
+    const cardRow = data as SupabaseCardRow;
+    // Transparently dual-sync status to legacy Supabase
+    legacySyncService.syncCard(cardRow.public_token, undefined, dbStatus).catch(err => console.warn('[LegacySync] Background sync err:', err));
+
+    return mapRowToCard(cardRow);
   },
 
   /**
@@ -631,6 +640,11 @@ export const cardService = {
       }
       return card;
     });
+
+    // Transparently dual-sync restored cards to legacy Supabase
+    legacySyncService.syncCardsBulk(
+      rows.map(r => ({ token: r.public_token, destinationUrl: r.destination_url, status: r.status }))
+    ).catch(err => console.warn('[LegacySync] Bulk sync err:', err));
 
     // Sync to local cache
     const currentLocal = db.getCards();
