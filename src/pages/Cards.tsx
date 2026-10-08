@@ -14,6 +14,8 @@ import {
   Layers,
   CheckSquare,
   Square,
+  Upload,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { PageHeader } from '../components/ui/PageHeader';
 import { Table, Column } from '../components/ui/Table';
@@ -67,6 +69,27 @@ export const Cards: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [isExportingSelected, setIsExportingSelected] = useState(false);
+
+  // CSV Import / Restore Modal State
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [csvRawText, setCsvRawText] = useState('');
+  const [importClientName, setImportClientName] = useState('');
+  const [importBatchName, setImportBatchName] = useState('Restored Printed Batch');
+  const [importOverrideDest, setImportOverrideDest] = useState('');
+  const [parsedPreview, setParsedPreview] = useState<Array<{
+    internal_card_no: string;
+    public_token: string;
+    destination_url?: string;
+    status?: CardStatus;
+    scan_count?: number;
+  }>>([]);
+  const [isImporting, setIsImporting] = useState(false);
+
+  // Bulk Edit Destination State
+  const [isBulkDestModalOpen, setIsBulkDestModalOpen] = useState(false);
+  const [bulkDestinationUrl, setBulkDestinationUrl] = useState('');
+  const [bulkClientName, setBulkClientName] = useState('');
+  const [isSavingBulkDest, setIsSavingBulkDest] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -205,6 +228,136 @@ export const Cards: React.FC = () => {
       error('Export failed', (err as Error).message);
     } finally {
       setIsExportingSelected(false);
+    }
+  };
+
+  const parseCsvText = (text: string) => {
+    const lines = text.trim().split('\n');
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+
+    const cardNoIdx = headers.findIndex(h => h.includes('card no') || h.includes('internal'));
+    const tokenIdx = headers.findIndex(h => h.includes('token') || h.includes('public'));
+    const destIdx = headers.findIndex(h => h.includes('destination') || h.includes('backend') || h.includes('url'));
+    const statusIdx = headers.findIndex(h => h.includes('status'));
+    const scanIdx = headers.findIndex(h => h.includes('scan'));
+
+    const items: Array<{
+      internal_card_no: string;
+      public_token: string;
+      destination_url?: string;
+      status?: CardStatus;
+      scan_count?: number;
+    }> = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      const values: string[] = [];
+      let cur = '';
+      let inQ = false;
+      for (let c = 0; c < line.length; c++) {
+        const char = line[c];
+        if (char === '"') inQ = !inQ;
+        else if (char === ',' && !inQ) {
+          values.push(cur.trim());
+          cur = '';
+        } else {
+          cur += char;
+        }
+      }
+      values.push(cur.trim());
+
+      const rawCardNo = cardNoIdx >= 0 ? values[cardNoIdx] : values[0];
+      const rawToken = tokenIdx >= 0 ? values[tokenIdx] : values[1];
+      const rawDest = destIdx >= 0 ? values[destIdx] : undefined;
+      const cleanDest = rawDest ? rawDest.replace(/^"|"$/g, '').trim() : undefined;
+      const rawStatus = statusIdx >= 0 ? values[statusIdx] : 'Ready';
+      const rawScans = scanIdx >= 0 ? parseInt(values[scanIdx], 10) || 0 : 0;
+
+      if (rawCardNo && rawToken) {
+        items.push({
+          internal_card_no: rawCardNo.replace(/^"|"$/g, '').trim(),
+          public_token: rawToken.replace(/^"|"$/g, '').trim().toUpperCase(),
+          destination_url: cleanDest,
+          status: (rawStatus.replace(/^"|"$/g, '').trim() as CardStatus) || 'Ready',
+          scan_count: rawScans,
+        });
+      }
+    }
+    return items;
+  };
+
+  const handleCsvTextChange = (text: string) => {
+    setCsvRawText(text);
+    const parsed = parseCsvText(text);
+    setParsedPreview(parsed);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const content = ev.target?.result as string;
+      if (content) {
+        handleCsvTextChange(content);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleRestoreCsvSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!parsedPreview.length) {
+      error('No valid cards parsed from CSV');
+      return;
+    }
+    setIsImporting(true);
+    try {
+      const cardsToImport = parsedPreview.map(c => ({
+        ...c,
+        destination_url: importOverrideDest.trim() || c.destination_url || 'https://www.google.com/',
+        client_name: importClientName.trim() || undefined,
+        batch_name: importBatchName.trim() || undefined,
+      }));
+
+      await cardService.restoreCardsFromCsv(cardsToImport);
+      success('Cards Restored Successfully', `Imported ${cardsToImport.length} cards into Supabase database.`);
+      setIsImportModalOpen(false);
+      setCsvRawText('');
+      setParsedPreview([]);
+      await loadData();
+    } catch (err) {
+      error('Import failed', (err as Error).message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleBulkDestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkDestinationUrl.trim()) {
+      error('Destination URL cannot be empty');
+      return;
+    }
+    setIsSavingBulkDest(true);
+    try {
+      const selectedList = cards.filter(c => selectedCardIds.has(c.id));
+      for (const card of selectedList) {
+        await cardService.updateCardDestination(card.id, bulkDestinationUrl.trim());
+        if (bulkClientName.trim()) {
+          await cardService.updateCardClient(card.id, bulkClientName.trim());
+        }
+      }
+      success('Destination Updated', `Updated ${selectedList.length} cards in Supabase.`);
+      setIsBulkDestModalOpen(false);
+      setSelectedCardIds(new Set());
+      await loadData();
+    } catch (err) {
+      error('Bulk update failed', (err as Error).message);
+    } finally {
+      setIsSavingBulkDest(false);
     }
   };
 
@@ -414,6 +567,14 @@ export const Cards: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setIsImportModalOpen(true)}
+              leftIcon={<Upload className="w-4 h-4 text-emerald-600" />}
+            >
+              Import / Restore CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate('/qr-generator')}
               leftIcon={<QrCode className="w-4 h-4" />}
             >
@@ -447,6 +608,15 @@ export const Cards: React.FC = () => {
             <span>{selectedCardIds.size} cards selected</span>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsBulkDestModalOpen(true)}
+              leftIcon={<Edit2 className="w-3.5 h-3.5 text-brand-600" />}
+              className="bg-white text-xs"
+            >
+              Set Destination ({selectedCardIds.size})
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -687,6 +857,156 @@ export const Cards: React.FC = () => {
           </form>
         </Modal>
       )}
+
+      {/* Import / Restore CSV Modal */}
+      <Modal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        title="Import / Restore Printed Cards from CSV"
+        maxWidth="lg"
+      >
+        <form onSubmit={handleRestoreCsvSubmit} className="space-y-4">
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 space-y-1">
+            <div className="font-semibold flex items-center gap-1.5">
+              <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+              <span>Instant Card Recovery & Dynamic QR Re-linking</span>
+            </div>
+            <p className="text-emerald-800">
+              Paste the manifest CSV from your printed batch export ZIP or upload the CSV file. All cards will be restored into the Supabase database with their original tokens and dynamic URLs immediately.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Upload CSV File</label>
+            <input
+              type="file"
+              accept=".csv,.txt"
+              onChange={handleFileUpload}
+              className="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 cursor-pointer border border-slate-200 rounded-lg p-1.5"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">Or Paste CSV Content Directly</label>
+            <textarea
+              rows={6}
+              value={csvRawText}
+              onChange={e => handleCsvTextChange(e.target.value)}
+              placeholder="Internal Card No,Public Token,Dynamic URL,Backend Destination URL,Status,Total Scans..."
+              className="w-full text-xs font-mono p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500 bg-slate-50"
+            />
+          </div>
+
+          {parsedPreview.length > 0 && (
+            <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 flex items-center justify-between text-xs font-medium text-slate-800">
+              <span className="text-emerald-700 font-bold">
+                ✓ {parsedPreview.length} valid cards recognized in CSV!
+              </span>
+              <span className="text-slate-500 font-mono text-[11px]">
+                {parsedPreview[0]?.internal_card_no} ... {parsedPreview[parsedPreview.length - 1]?.internal_card_no}
+              </span>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <div>
+              <Input
+                label="Assign Client Name (Optional)"
+                value={importClientName}
+                onChange={e => setImportClientName(e.target.value)}
+                placeholder="e.g. Acme Corp / General"
+              />
+            </div>
+            <div>
+              <Input
+                label="Batch Name (Optional)"
+                value={importBatchName}
+                onChange={e => setImportBatchName(e.target.value)}
+                placeholder="e.g. Printed Batch 1"
+              />
+            </div>
+          </div>
+
+          <div>
+            <Input
+              label="Override Destination URL (Optional)"
+              type="url"
+              value={importOverrideDest}
+              onChange={e => setImportOverrideDest(e.target.value)}
+              placeholder="Leave blank to use CSV destination (or https://www.google.com)"
+              helperText="If provided, this URL will be assigned to all imported cards instead of the CSV value."
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsImportModalOpen(false)}
+              disabled={isImporting}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={isImporting}
+              disabled={parsedPreview.length === 0}
+            >
+              Restore & Save {parsedPreview.length ? `(${parsedPreview.length} Cards)` : ''} to Supabase
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Bulk Update Destination Modal */}
+      <Modal
+        isOpen={isBulkDestModalOpen}
+        onClose={() => setIsBulkDestModalOpen(false)}
+        title={`Set Destination for ${selectedCardIds.size} Cards`}
+        maxWidth="md"
+      >
+        <form onSubmit={handleBulkDestSubmit} className="space-y-4">
+          <p className="text-xs text-slate-600">
+            Update the live dynamic forwarding destination URL for all {selectedCardIds.size} selected cards at once in Supabase.
+          </p>
+
+          <div>
+            <Input
+              label="New Destination URL"
+              type="url"
+              required
+              value={bulkDestinationUrl}
+              onChange={e => setBulkDestinationUrl(e.target.value)}
+              placeholder="https://g.page/r/your-client/review"
+              helperText="All selected cards will redirect to this link immediately when scanned."
+            />
+          </div>
+
+          <div>
+            <Input
+              label="Assign Client Name (Optional)"
+              value={bulkClientName}
+              onChange={e => setBulkClientName(e.target.value)}
+              placeholder="e.g. Hotel Marriott"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsBulkDestModalOpen(false)}
+              disabled={isSavingBulkDest}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary" isLoading={isSavingBulkDest}>
+              Update All {selectedCardIds.size} Cards
+            </Button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Single Card Delete Dialog */}
       <ConfirmDialog

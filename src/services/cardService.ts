@@ -578,4 +578,73 @@ export const cardService = {
 
     return null;
   },
+
+  /**
+   * Bulk import / restore cards from CSV or external list into Supabase
+   */
+  async restoreCardsFromCsv(cardsToImport: Array<{
+    internal_card_no: string;
+    public_token: string;
+    destination_url?: string | null;
+    status?: CardStatus;
+    scan_count?: number;
+    client_name?: string;
+    client_id?: string;
+    batch_name?: string;
+    batch_id?: string;
+  }>): Promise<Card[]> {
+    if (!supabase) {
+      throw new Error('Supabase client is not configured.');
+    }
+
+    if (!cardsToImport.length) {
+      throw new Error('No cards provided for import.');
+    }
+
+    const rows = cardsToImport.map(c => ({
+      internal_card_no: c.internal_card_no.trim().toUpperCase(),
+      public_token: c.public_token.trim().toUpperCase(),
+      destination_url: c.destination_url?.trim() || 'https://www.google.com/',
+      status: toDbStatus(c.status || 'Ready'),
+      scan_count: c.scan_count || 0,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { data, error } = await supabase
+      .from('cards')
+      .upsert(rows, { onConflict: 'internal_card_no' })
+      .select();
+
+    if (error || !data) {
+      console.error('Error importing cards into Supabase:', error);
+      throw new Error(`Failed to import cards: ${error?.message || 'Database error'}`);
+    }
+
+    const importedCards = (data as SupabaseCardRow[]).map(row => {
+      const card = mapRowToCard(row);
+      const match = cardsToImport.find(c => c.internal_card_no.toUpperCase() === card.internal_card_no.toUpperCase());
+      if (match) {
+        if (match.client_name) card.client_name = match.client_name;
+        if (match.client_id) card.client_id = match.client_id;
+        if (match.batch_name) card.batch_name = match.batch_name;
+        if (match.batch_id) card.batch_id = match.batch_id;
+      }
+      return card;
+    });
+
+    // Sync to local cache
+    const currentLocal = db.getCards();
+    const map = new Map<string, Card>();
+    currentLocal.forEach(c => map.set(c.internal_card_no, c));
+    importedCards.forEach(c => map.set(c.internal_card_no, c));
+    db.saveCards(Array.from(map.values()));
+
+    db.logActivity({
+      action: 'Cards Imported/Restored',
+      description: `Restored ${importedCards.length} cards into Supabase database`,
+      type: 'card',
+    });
+
+    return importedCards;
+  },
 };
